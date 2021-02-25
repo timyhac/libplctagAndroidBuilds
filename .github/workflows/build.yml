@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          repository: 'https://github.com/libplctag/libplctag'
+          repository: 'libplctag/libplctag'
 
       - uses: nttld/setup-ndk@v1
         id: setup-ndk
