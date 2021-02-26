@@ -1,7 +1,11 @@
-name: CI
+name: build
 
 on:
   workflow_dispatch:
+    inputs:
+      VERSION:
+        description: 'Version number string'
+        required: true
 
 jobs:
   build:
@@ -16,7 +20,6 @@ jobs:
           - x86_64
           
     env:
-      VERSION: "2.3.4"
       BUILD: "${{ github.workspace }}/build"
       DIST: "${{ github.workspace }}/build/bin_dist"
 
@@ -42,5 +45,13 @@ jobs:
       - name: Upload ZIP artifact
         uses: actions/upload-artifact@v1
         with:
-          name: "libplctag_${{ env.VERSION }}_android_${{ matrix.abi }}"
+          name: "libplctag_${{ github.event.inputs.VERSION }}_android_${{ matrix.abi }}"
           path: ${{ env.DIST }}
+          
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        with:
+          release_name: Release v${{ github.event.inputs.VERSION }}
