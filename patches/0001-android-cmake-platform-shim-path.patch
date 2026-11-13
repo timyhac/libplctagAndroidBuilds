@@ -1,0 +1,13 @@
+--- a/cmake_toolchains/android.cmake	2026-11-13 15:21:53.252385500 +1100
++++ b/cmake_toolchains/android.cmake	2026-11-13 15:21:53.254900300 +1100
+@@ -2,8 +2,7 @@
+ message("Building on Android.")
+ set(ANDROID_BUILD 1)
+ 
+-# fill in with Android specific config here.
++# Android (Bionic libc) uses the POSIX platform layer. pthreads are part of libc, so no extra linker libs.
++set(PLATFORM_SHIM_PATH "${CMAKE_CURRENT_LIST_DIR}/../src/platform/posix" )
+ 
+-
+-# FIXME - is this actually right?  Android is a little weird.
+ set(POSIX True)

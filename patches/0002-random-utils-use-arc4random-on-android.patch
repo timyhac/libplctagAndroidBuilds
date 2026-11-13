@@ -1,0 +1,11 @@
+--- a/src/utils/random_utils.c	2026-11-13 14:02:37.367568400 +1100
++++ b/src/utils/random_utils.c	2026-11-13 14:02:37.512666400 +1100
+@@ -37,7 +37,7 @@
+ 
+ 
+ /* FIXME - move this all over into a compatibility/platform check header */
+-#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
++#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__ANDROID__)
+ #    include <stdlib.h>
+ 
+ uint64_t random_u64(uint64_t upper_bound) {

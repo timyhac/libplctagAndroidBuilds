@@ -1,8 +1,9 @@
 # libplctagAndroidBuilds
 
-This repository provides android builds for [libplctag](https://github.com/libplctag/libplctag) via github actions.
+Android builds of [libplctag](https://github.com/libplctag/libplctag) (`arm64-v8a`, `x86_64`, `armeabi-v7a`, `x86`), built with GitHub Actions.
 
-The code in this repository is licensed as MIT.
-The binaries are licensed separately by licplctag - see https://github.com/libplctag/libplctag for details.
+Each build runs core's simulator test suite on x86_64 emulators (API 24 and 35). Run the workflow with `RELEASE` ticked to publish the zips.
 
-See the [actions page](https://github.com/timyhac/libplctagAndroidBuilds/actions) for downloads.
+[`patches/`](patches) holds fixes core needs to build for Android. A patch is skipped once it's in upstream core.
+
+The code in this repository is MIT licensed. The binaries are licensed by libplctag; see https://github.com/libplctag/libplctag.

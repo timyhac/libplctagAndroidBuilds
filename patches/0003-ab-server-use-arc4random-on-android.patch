@@ -1,0 +1,11 @@
+--- a/src/tools/ab_server/utils.c	2026-11-13 14:02:37.464856000 +1100
++++ b/src/tools/ab_server/utils.c	2026-11-13 14:02:37.533585500 +1100
+@@ -314,7 +314,7 @@
+ }
+ 
+ /* FIXME - move this all over into a compatibility/platform check header */
+-#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
++#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__ANDROID__)
+ #    include <stdlib.h>
+ 
+ uint64_t random_u64(uint64_t upper_bound) {
