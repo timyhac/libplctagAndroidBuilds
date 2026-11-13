@@ -1,0 +1,15 @@
+--- a/src/tests/test_omron_destroy/test_omron_destroy.c	2026-11-13 14:27:09.398530700 +1100
++++ b/src/tests/test_omron_destroy/test_omron_destroy.c	2026-11-13 14:27:09.421195300 +1100
+@@ -97,9 +97,9 @@
+ #    define SERVER_STOP "for /f %%p in (ab_server_%d.pid) do taskkill /PID %%p /F >nul 2>&1 & del /f ab_server_%d.pid >nul 2>&1"
+ #else
+ #    define SERVER_START \
+-        "%s --plc=Omron --port=%d --tag=TestDINTArray:DINT[10] > /tmp/omron_destroy_test_server.log 2>&1 & echo $! > " \
+-        "/tmp/ab_server_%d.pid"
+-#    define SERVER_STOP "kill -TERM $(cat /tmp/ab_server_%d.pid 2>/dev/null) 2>/dev/null; rm -f /tmp/ab_server_%d.pid"
++        "%s --plc=Omron --port=%d --tag=TestDINTArray:DINT[10] > ${TMPDIR:-/tmp}/omron_destroy_test_server.log 2>&1 & echo $! > " \
++        "${TMPDIR:-/tmp}/ab_server_%d.pid"
++#    define SERVER_STOP "kill -TERM $(cat ${TMPDIR:-/tmp}/ab_server_%d.pid 2>/dev/null) 2>/dev/null; rm -f ${TMPDIR:-/tmp}/ab_server_%d.pid"
+ #endif
+ 
+ #define log(...)                          \

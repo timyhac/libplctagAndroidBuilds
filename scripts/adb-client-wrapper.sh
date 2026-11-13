@@ -39,4 +39,5 @@ if [[ $server_on_device -eq 0 ]]; then
   done
 fi
 
-exec "$ADB" shell "cd $DEVICE_DIR && LD_LIBRARY_PATH=$DEVICE_DIR $dev_exe ${quoted[*]}"
+# TMPDIR: older Android images have no /tmp; tests that write scratch files honour TMPDIR.
+exec "$ADB" shell "cd $DEVICE_DIR && TMPDIR=$DEVICE_DIR LD_LIBRARY_PATH=$DEVICE_DIR $dev_exe ${quoted[*]}"

@@ -26,6 +26,8 @@ automatically once they are already present upstream:
 1. `cmake_toolchains/android.cmake` doesn't set `PLATFORM_SHIM_PATH` (configure fails).
 2. `src/utils/random_utils.c` uses `getrandom()`, which Bionic only has from API 28. On Android it now uses `arc4random_buf`.
 3. Same as 2, for `src/tools/ab_server/utils.c`.
+4. `test_omron_destroy` hardcodes `/tmp` for its server pid and log files. Android 7 (API 24) has no `/tmp`,
+   so it now honours `$TMPDIR`, which the adb wrapper sets on the device. This is a test-only change.
 
 ## License
 
