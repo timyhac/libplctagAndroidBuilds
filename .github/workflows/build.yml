@@ -4,46 +4,163 @@ on:
   workflow_dispatch:
     inputs:
       VERSION:
-        description: 'Version number string (e.g. 2.3.4)'
+        description: 'libplctag core version (e.g. 2.7.2)'
         required: true
+      RELEASE:
+        description: 'Publish a GitHub release (v<VERSION>) with the zips'
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  # Default used for push/PR runs; workflow_dispatch overrides it.
+  VERSION: ${{ inputs.VERSION || '2.7.2' }}
+  NDK_VERSION: r28c          # r28+ produces 16 KB page-aligned .so files (Google Play requirement)
+  ANDROID_PLATFORM: android-24
 
 jobs:
   build:
+    name: build (${{ matrix.abi }})
     runs-on: ubuntu-latest
-    
     strategy:
+      fail-fast: false
       matrix:
-        abi:
-          - armeabi-v7a
-          - arm64-v8a
-          - x86
-          - x86_64
-          
-    env:
-      BUILD: "${{ github.workspace }}/build"
-      DIST: "${{ github.workspace }}/build/bin_dist"
-
+        include:
+          # yafl = triple for core's vendored libyafl (fiber POCs); it can't auto-detect Android.
+          - { abi: arm64-v8a,   yafl: aarch64-pc-linux-gnu,         page16k: true  }
+          - { abi: x86_64,      yafl: x86_64-unknown-linux-android, page16k: true  }
+          - { abi: armeabi-v7a, yafl: arm-pc-linux-gnu,             page16k: false }
+          - { abi: x86,         yafl: i386-pc-linux-gnu,            page16k: false }
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
         with:
-          repository: 'libplctag/libplctag'
+          repository: libplctag/libplctag
+          ref: v${{ env.VERSION }}
+          path: core
+
+      - name: Apply Android patches
+        run: bash scripts/apply-patches.sh core
 
       - uses: nttld/setup-ndk@v1
-        id: setup-ndk
+        id: ndk
         with:
-          ndk-version: r21d
+          ndk-version: ${{ env.NDK_VERSION }}
+          add-to-path: false
 
-      - name: Create build directory
-        run: rm -rf ${{ env.BUILD }}; mkdir -p ${{ env.BUILD }}
-
-      - name: Configure CMake
-        run: cd ${{ env.BUILD }}; cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=${{ steps.setup-ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake -DANDROID_ABI=${{ matrix.abi }} ..
+      - name: Configure
+        run: >
+          cmake -S core -B build -DCMAKE_BUILD_TYPE=MinSizeRel
+          -DCMAKE_TOOLCHAIN_FILE=${{ steps.ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake
+          -DANDROID_ABI=${{ matrix.abi }}
+          -DANDROID_PLATFORM=${{ env.ANDROID_PLATFORM }}
+          -DTARGET=${{ matrix.yafl }}
 
       - name: Build
-        run: cd ${{ env.BUILD }}; cmake --build .
+        run: cmake --build build --parallel
 
-      - name: Upload ZIP artifact
-        uses: actions/upload-artifact@v1
+      - name: Package
+        run: |
+          LLVM=${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin
+          mkdir pkg
+          cp build/bin_dist/libplctag.so build/bin_dist/libplctag.h pkg/
+          $LLVM/llvm-strip --strip-unneeded pkg/libplctag.so
+          $LLVM/llvm-readelf -lW pkg/libplctag.so | grep LOAD
+          if [ "${{ matrix.page16k }}" = "true" ]; then
+            $LLVM/llvm-readelf -lW pkg/libplctag.so | awk '/LOAD/ && $NF != "0x4000" { bad=1 } END { exit bad }' \
+              || { echo "::error::libplctag.so is not 16 KB page aligned"; exit 1; }
+          fi
+          (cd pkg && zip ../libplctag_${VERSION}_android_${{ matrix.abi }}.zip *)
+
+      - uses: actions/upload-artifact@v4
         with:
-          name: "libplctag_${{ github.event.inputs.VERSION }}_android_${{ matrix.abi }}"
-          path: ${{ env.DIST }}
+          name: libplctag_${{ env.VERSION }}_android_${{ matrix.abi }}
+          path: libplctag_${{ env.VERSION }}_android_${{ matrix.abi }}.zip
+
+      # Full build output (library + test clients + servers) for the emulator test job.
+      - uses: actions/upload-artifact@v4
+        if: matrix.abi == 'x86_64'
+        with:
+          name: test-bin-android-x86_64
+          path: build/bin_dist/
+          retention-days: 3
+
+  test:
+    name: test (API ${{ matrix.api-level }})
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [24, 35]   # minimum supported + current
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: libplctag/libplctag
+          ref: v${{ env.VERSION }}
+          path: core
+
+      - name: Apply Android patches
+        run: bash scripts/apply-patches.sh core
+
+      # Servers (ab_server, modbus_server) run on the runner; the test runner also needs the
+      # client executables present on the host to resolve names, but runs the Android builds.
+      - name: Build host servers and test runner inputs
+        run: |
+          cmake -S core -B host-build -DCMAKE_BUILD_TYPE=MinSizeRel
+          cmake --build host-build --parallel
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: test-bin-android-x86_64
+          path: android-bin
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run core test suite on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          target: default
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash scripts/run-android-tests.sh android-bin host-build/bin_dist core logs --timeout-scale 3
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-logs-api${{ matrix.api-level }}
+          path: logs/
+          retention-days: 7
+
+  release:
+    needs: [build, test]
+    if: github.event_name == 'workflow_dispatch' && inputs.RELEASE
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: libplctag_*_android_*
+          merge-multiple: true
+          path: zips
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "v${VERSION}" zips/*.zip
+          --repo "${{ github.repository }}"
+          --title "libplctag ${VERSION} for Android"
+          --notes "Android builds of libplctag core v${VERSION} (NDK ${NDK_VERSION}, min ${ANDROID_PLATFORM}). Tested on emulator (x86_64) against the core simulator suite."
